@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -55,18 +56,26 @@ func (h *StockHandler) ProcessStockMovement(w http.ResponseWriter, r *http.Reque
 
 	movement, err := h.stockService.ProcessStockMovement(r.Context(), &req, user.ID)
 	if err != nil {
+		// Debug logging for error handling
+		fmt.Printf("DEBUG HANDLER: Error occurred: %v\n", err)
+		fmt.Printf("DEBUG HANDLER: Error type: %T\n", err)
+
 		if err == domain.ErrNotFound {
+			fmt.Printf("DEBUG HANDLER: Handling ErrNotFound\n")
 			h.respondWithError(w, http.StatusNotFound, "Product or location not found")
 			return
 		}
 		if err == domain.ErrInsufficientStock {
+			fmt.Printf("DEBUG HANDLER: Handling ErrInsufficientStock\n")
 			h.respondWithError(w, http.StatusBadRequest, "Insufficient stock for this operation")
 			return
 		}
 		if err == domain.ErrExceedsCapacity {
+			fmt.Printf("DEBUG HANDLER: Handling ErrExceedsCapacity\n")
 			h.respondWithError(w, http.StatusBadRequest, "Stock movement exceeds location capacity")
 			return
 		}
+		fmt.Printf("DEBUG HANDLER: Handling generic error\n")
 		h.respondWithError(w, http.StatusInternalServerError, "Failed to process stock movement")
 		return
 	}
@@ -181,7 +190,10 @@ func (h *StockHandler) respondWithError(w http.ResponseWriter, code int, message
 			Message: message,
 		},
 	}
-	h.respondWithJSON(w, code, response)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	json.NewEncoder(w).Encode(response)
 }
 
 func (h *StockHandler) respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
@@ -190,14 +202,7 @@ func (h *StockHandler) respondWithJSON(w http.ResponseWriter, code int, payload 
 		Data:    payload,
 	}
 
-	if code >= 400 {
-		response.Success = false
-		response.Data = nil
-		if apiError, ok := payload.(*domain.APIError); ok {
-			response.Error = apiError
-		}
-	}
-
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	json.NewEncoder(w).Encode(response)
 }
